@@ -21,11 +21,12 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 @RestController
 @RequestMapping("/dex2java")
 public class DJController {
-    private static final String JARFILE_DIRECTORY="D:\\develop\\idea\\Dex2Jar_File\\src\\main\\resources\\convert_file\\";
+    public static final String JARFILE_DIRECTORY="D:\\develop\\idea\\Dex2Jar_File\\src\\main\\resources\\convert_file\\";
 
     @RequestMapping("/test")
     public String hellWord(){
@@ -33,25 +34,26 @@ public class DJController {
     }
 
     @RequestMapping(value = "/outClassToJava",method = RequestMethod.POST)
-    public String outClassToJava(@RequestParam("file")MultipartFile file){
+    public String outClassToJava(@RequestParam("file")MultipartFile file,@RequestParam String data){
         MultipartConfig.log.info("outClassToJava-----------------");
 
-        IDexToJava iDexToJava=new DexToJava();
-
-        String fileName="resourcess";
+        IDexToJava iDexToJava=DexToJava.getInstance();
         String resqones="the fail";
-        if (file==null){
+        if (file==null || data==null){
             MultipartConfig.log.info("file is null");
             return "code:500";
         }
+        MultipartConfig.log.info("file name :"+data);
         File isDirectory=new File(JARFILE_DIRECTORY);
         if (!isDirectory.exists()){
             isDirectory.mkdir();
         }
-        File classFile=new File(JARFILE_DIRECTORY +fileName+".class");
+        String className=data.split(";")[0];
+        String packageName=data.split(";")[1]+"\\";
+        File classFile=new File(JARFILE_DIRECTORY+packageName+className+".class");
         try {
             file.transferTo(classFile);
-            resqones=iDexToJava.evecuteJad(JARFILE_DIRECTORY,fileName);
+            resqones=iDexToJava.evecuteJad(JARFILE_DIRECTORY+packageName,className);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -70,6 +72,7 @@ public class DJController {
             MultipartConfig.log.info("file is null");
             return 1;
         }
+        //本地应用资源路径
         directoryPath=JARFILE_DIRECTORY+packageName+"\\";
         File isDirFile=new File(directoryPath);
         if (!isDirFile.exists()){
@@ -107,11 +110,20 @@ public class DJController {
             throw new RuntimeException(e);
         }
     }
-
+    //打包应用jar
     @GetMapping("/dlzip")
-    public ResponseEntity<Resource> inJavaZip(@RequestParam String filePackageName){
-        JarFileZipper.zipFileByType(JARFILE_DIRECTORY+filePackageName,".jar",JARFILE_DIRECTORY+filePackageName+"\\JarFile.zip");
-        Path path=Paths.get(JARFILE_DIRECTORY+filePackageName+"\\JarFile.zip");
+    public ResponseEntity<Resource> inJarZip(@RequestParam String filePackageName,@RequestParam String fileType){
+        MultipartConfig.log.info("packageName:"+filePackageName+"  filetype:"+fileType);
+        String fileName;
+        if (fileType.equals(".jar")){
+            fileName="JarFile.zip";
+        }else if (fileType.equals(".java")){
+            fileName="JavaFile.zip";
+        }else {
+            return ResponseEntity.notFound().build();
+        }
+        JarFileZipper.zipFileByType(JARFILE_DIRECTORY+filePackageName,fileType,JARFILE_DIRECTORY+filePackageName+"\\"+fileName);
+        Path path=Paths.get(JARFILE_DIRECTORY+filePackageName+"\\"+fileName);
         ResponseEntity<Resource> response;
         try {
             Resource resource=new UrlResource(path.toUri());
@@ -126,5 +138,15 @@ public class DJController {
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @GetMapping("/all")
+    public int all(@RequestParam String filePackageName){
+        MultipartConfig.log.info("all      packageName:"+filePackageName);
+        if (filePackageName==null)
+            return 500;
+        List<File> list=JarFileZipper.getFilesByType(new File(JARFILE_DIRECTORY+filePackageName),"jar");
+        DexToJava.allC2J(list,filePackageName);
+        return 200;
     }
 }
